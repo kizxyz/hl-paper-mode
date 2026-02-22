@@ -51,9 +51,15 @@ def calc_liq_price(
     from hl_paper.models import Side as _Side
 
     if side == _Side.BUY:
-        p = (entry - balance / size) / (1.0 - mmr)
+        denom = 1.0 - mmr
+        if denom == 0:
+            return None
+        p = (entry - balance / size) / denom
     else:
-        p = (balance / size + entry) / (1.0 + mmr)
+        denom = 1.0 + mmr
+        if denom == 0:
+            return None
+        p = (balance / size + entry) / denom
 
     if p <= 0:
         return None

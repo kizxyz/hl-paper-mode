@@ -153,3 +153,55 @@ class TestLeverageMismatch:
 
         assert result["status"] == "rejected"
         assert "leverage" in result.get("reason", "").lower()
+
+
+# ---------------------------------------------------------------------------
+# Audit: empty account liquidation guard
+# ---------------------------------------------------------------------------
+class TestEmptyAccountLiquidation:
+    def test_no_positions_no_liquidation(self, engine):
+        engine.state.balance = 0.0  # zero balance, no positions
+        closed = engine.check_liquidations()
+        assert closed == []
+        assert len(engine.state.positions) == 0
+
+    def test_liquidation_only_fires_with_positions(self, engine):
+        # Balance below any reasonable MM, but no positions
+        engine.state.balance = 1.0
+        engine.on_price_update("BTC", 50000.0)
+        closed = engine.check_liquidations()
+        assert closed == []
+
+
+# ---------------------------------------------------------------------------
+# Audit: short reduce rpnl correctness (end-to-end)
+# ---------------------------------------------------------------------------
+class TestShortReduceRpnlE2E:
+    def test_short_reduce_balance_correct(self, engine):
+        engine.on_price_update("ETH", 3000.0)
+        initial_balance = engine.state.balance
+
+        # Open short
+        engine.on_order(OrderIntent(
+            symbol="ETH", side=Side.SELL, order_type=OrderType.MARKET,
+            size_value=10.0, size_unit=SizeUnit.BASE, leverage=5,
+            client_id="s1", timestamp=1000,
+        ))
+
+        balance_after_open = engine.state.balance
+        assert balance_after_open < initial_balance  # fee deducted
+
+        # Price drops — short in profit
+        engine.on_price_update("ETH", 2800.0)
+
+        # Reduce short by buying 5
+        engine.on_order(OrderIntent(
+            symbol="ETH", side=Side.BUY, order_type=OrderType.MARKET,
+            size_value=5.0, size_unit=SizeUnit.BASE, leverage=5,
+            client_id="s2", timestamp=1001,
+        ))
+
+        # Balance should increase (rpnl positive for short when price drops)
+        assert engine.state.balance > balance_after_open
+        # Position should still exist with reduced size
+        assert engine.state.positions["ETH"].size < 10.0

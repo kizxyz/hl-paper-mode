@@ -208,6 +208,10 @@ class TestCalcLiqPriceEdge:
         # P = (50000 - 100000/1) / (1 - 0.05) = -50000/0.95 < 0
         assert calc_liq_price(Side.BUY, 50000.0, 100000.0, 1.0, 0.05) is None
 
+    def test_mmr_one_long_returns_none(self):
+        # mmr=1.0 → denominator (1 - 1.0) = 0 → division by zero guard
+        assert calc_liq_price(Side.BUY, 50000.0, 5000.0, 1.0, 1.0) is None
+
 
 # ---------------------------------------------------------------------------
 # Exec Price (USD slippage ordering)
