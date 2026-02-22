@@ -72,3 +72,12 @@ class TestDeleteOrder:
     def test_cancel_nonexistent(self, client):
         resp = client.delete("/api/v1/order/fake-id")
         assert resp.status_code == 404
+
+
+class TestWsState:
+    def test_ws_connects_and_receives(self, client):
+        with client.websocket_connect("/ws/state") as ws:
+            # Should receive initial state on connect
+            data = ws.receive_json()
+            assert "balance" in data
+            assert "positions" in data
