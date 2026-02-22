@@ -53,6 +53,31 @@ class Position(BaseModel):
         return 1 if self.side == Side.BUY else -1
 
 
+class Fill(BaseModel):
+    symbol: str
+    side: Side
+    size: float
+    price: float
+    fee: float
+    rpnl: float = 0.0
+    order_id: str = ""
+    timestamp: int = 0
+
+
+class OpenOrder(BaseModel):
+    order_id: str
+    symbol: str
+    side: Side
+    order_type: OrderType
+    size: float  # base units
+    limit_price: float
+    leverage: int
+    reduce_only: bool = False
+    client_id: str = ""
+    timestamp: int = 0
+
+
 class AccountState(BaseModel):
     balance: float = STARTING_BALANCE
     positions: dict[str, Position] = Field(default_factory=dict)
+    open_orders: dict[str, OpenOrder] = Field(default_factory=dict)
