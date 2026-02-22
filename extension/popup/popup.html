@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 280px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, monospace;
+      font-size: 13px;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      margin: 0;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      color: #f59e0b;
+      text-align: center;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #2a2a4a;
+    }
+    .row:last-child { border-bottom: none; }
+    .label { font-weight: bold; }
+    .status {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .on { background: #22c55e; color: #000; }
+    .off { background: #ef4444; color: #fff; }
+    .online { background: #22c55e; color: #000; }
+    .offline { background: #ef4444; color: #fff; }
+    button {
+      width: 100%;
+      margin-top: 12px;
+      padding: 8px;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    #togglePaper {
+      background: #f59e0b;
+      color: #000;
+    }
+    #toggleDnr {
+      background: #3b82f6;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <h2>HL PAPER MODE</h2>
+
+  <div class="row">
+    <span class="label">Paper Mode</span>
+    <span id="paperStatus" class="status off">OFF</span>
+  </div>
+  <div class="row">
+    <span class="label">Backend</span>
+    <span id="backendStatus" class="status offline">OFFLINE</span>
+  </div>
+  <div class="row">
+    <span class="label">DNR Block</span>
+    <span id="dnrStatus" class="status off">OFF</span>
+  </div>
+
+  <button id="togglePaper">Toggle Paper Mode</button>
+  <button id="toggleDnr">Toggle DNR Failsafe</button>
+
+  <script>
+    const paperEl = document.getElementById("paperStatus");
+    const backendEl = document.getElementById("backendStatus");
+    const dnrEl = document.getElementById("dnrStatus");
+
+    function updateUI(state) {
+      paperEl.textContent = state.paperMode ? "ON" : "OFF";
+      paperEl.className = `status ${state.paperMode ? "on" : "off"}`;
+
+      backendEl.textContent = state.backendOnline ? "ONLINE" : "OFFLINE";
+      backendEl.className = `status ${state.backendOnline ? "online" : "offline"}`;
+
+      dnrEl.textContent = state.dnrEnabled ? "ON" : "OFF";
+      dnrEl.className = `status ${state.dnrEnabled ? "on" : "off"}`;
+    }
+
+    // Load initial state
+    chrome.runtime.sendMessage({ type: "GET_STATE" }, updateUI);
+
+    document.getElementById("togglePaper").addEventListener("click", () => {
+      chrome.runtime.sendMessage({ type: "GET_STATE" }, (state) => {
+        const newVal = !state.paperMode;
+        chrome.runtime.sendMessage(
+          { type: "TOGGLE_PAPER_MODE", enabled: newVal },
+          () => {
+            chrome.runtime.sendMessage({ type: "GET_STATE" }, updateUI);
+          }
+        );
+      });
+    });
+
+    document.getElementById("toggleDnr").addEventListener("click", () => {
+      chrome.runtime.sendMessage({ type: "GET_STATE" }, (state) => {
+        const newVal = !state.dnrEnabled;
+        chrome.runtime.sendMessage(
+          { type: "TOGGLE_DNR", enabled: newVal },
+          () => {
+            chrome.runtime.sendMessage({ type: "GET_STATE" }, updateUI);
+          }
+        );
+      });
+    });
+  </script>
+</body>
+</html>

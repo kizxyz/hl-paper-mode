@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "https://api.hyperliquid.xyz/exchange",
+      "resourceTypes": ["xmlhttprequest", "other"],
+      "requestMethods": ["post"]
+    }
+  }
+]

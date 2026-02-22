@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "HL Paper Mode",
+  "version": "0.1.0",
+  "description": "Paper trading simulator for Hyperliquid",
+
+  "permissions": [
+    "storage",
+    "declarativeNetRequest"
+  ],
+
+  "host_permissions": [
+    "https://app.hyperliquid.xyz/*",
+    "http://localhost:8000/*"
+  ],
+
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://app.hyperliquid.xyz/*"],
+      "js": ["page/ws_patch.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://app.hyperliquid.xyz/*"],
+      "js": ["content/interceptor.js", "content/overlay.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "block_rules",
+        "enabled": false,
+        "path": "rules/block-rules.json"
+      }
+    ]
+  },
+
+  "action": {
+    "default_popup": "popup/popup.html"
+  }
+}
