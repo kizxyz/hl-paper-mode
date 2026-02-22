@@ -3,13 +3,17 @@ import pytest
 from hl_paper.math_core import (
     apply_slippage,
     calc_equity,
+    calc_exec_price,
     calc_fee,
     calc_liq_price,
     calc_maintenance_margin,
+    calc_rpnl,
     calc_slippage,
     calc_upnl,
     convert_size,
     is_liquidatable,
+    round_to_step,
+    round_to_tick,
 )
 from hl_paper.models import Position, Side
 
@@ -86,11 +90,16 @@ class TestIsLiquidatable:
         assert is_liquidatable(5000.0, 2500.0) is False
 
     def test_exactly_at_margin(self):
-        # equity == total_mm → liquidate (spec: equity <= total_MM)
-        assert is_liquidatable(2500.0, 2500.0) is True
+        # equity == total_mm → NOT liquidated (strict <)
+        assert is_liquidatable(2500.0, 2500.0) is False
 
     def test_below_margin(self):
         assert is_liquidatable(2000.0, 2500.0) is True
+
+    def test_empty_account_not_liquidatable(self):
+        # No positions → never liquidate, even if equity is 0
+        assert is_liquidatable(0.0, 0.0, has_positions=False) is False
+        assert is_liquidatable(100.0, 200.0, has_positions=False) is False
 
 
 # ---------------------------------------------------------------------------
@@ -158,3 +167,81 @@ class TestConvertSize:
 
     def test_base_passthrough(self):
         assert convert_size(0.5, "BASE", 50000.0) == pytest.approx(0.5)
+
+
+# ---------------------------------------------------------------------------
+# Realized PnL (side-aware)
+# ---------------------------------------------------------------------------
+class TestCalcRpnl:
+    def test_long_reduce_profit(self):
+        # Long: close 0.5 BTC, entry=50000, exit=52000
+        # rpnl = 1 * (52000 - 50000) * 0.5 = 1000
+        assert calc_rpnl(Side.BUY, 50000.0, 52000.0, 0.5) == pytest.approx(1000.0)
+
+    def test_long_reduce_loss(self):
+        # rpnl = 1 * (48000 - 50000) * 0.5 = -1000
+        assert calc_rpnl(Side.BUY, 50000.0, 48000.0, 0.5) == pytest.approx(-1000.0)
+
+    def test_short_reduce_profit(self):
+        # Short: close 1 BTC, entry=50000, exit=48000
+        # rpnl = -1 * (48000 - 50000) * 1 = 2000
+        assert calc_rpnl(Side.SELL, 50000.0, 48000.0, 1.0) == pytest.approx(2000.0)
+
+    def test_short_reduce_loss(self):
+        # Short: close 1 BTC, entry=50000, exit=52000
+        # rpnl = -1 * (52000 - 50000) * 1 = -2000
+        assert calc_rpnl(Side.SELL, 50000.0, 52000.0, 1.0) == pytest.approx(-2000.0)
+
+
+# ---------------------------------------------------------------------------
+# Liq Price Edge Cases
+# ---------------------------------------------------------------------------
+class TestCalcLiqPriceEdge:
+    def test_zero_size_returns_none(self):
+        assert calc_liq_price(Side.BUY, 50000.0, 5000.0, 0.0, 0.05) is None
+
+    def test_negative_size_returns_none(self):
+        assert calc_liq_price(Side.SELL, 50000.0, 5000.0, -1.0, 0.05) is None
+
+    def test_negative_result_returns_none(self):
+        # Long with huge balance → formula yields negative price
+        # P = (50000 - 100000/1) / (1 - 0.05) = -50000/0.95 < 0
+        assert calc_liq_price(Side.BUY, 50000.0, 100000.0, 1.0, 0.05) is None
+
+
+# ---------------------------------------------------------------------------
+# Exec Price (USD slippage ordering)
+# ---------------------------------------------------------------------------
+class TestCalcExecPrice:
+    def test_buy_usd(self):
+        # $5000 at mid=50000 → base=0.1, mid_notional=5000
+        # slippage = (5000/100000)*0.0001 = 0.000005
+        # exec = 50000 * (1 + 0.000005) = 50000.25
+        result = calc_exec_price(50000.0, Side.BUY, 5000.0, "USD")
+        assert result == pytest.approx(50000.25)
+
+    def test_sell_base(self):
+        # 1 BTC at mid=50000, mid_notional=50000
+        # slippage = (50000/100000)*0.0001 = 0.00005
+        # exec = 50000 * (1 - 0.00005) = 49997.5
+        result = calc_exec_price(50000.0, Side.SELL, 1.0, "BASE")
+        assert result == pytest.approx(49997.5)
+
+
+# ---------------------------------------------------------------------------
+# Rounding Utilities
+# ---------------------------------------------------------------------------
+class TestRounding:
+    def test_round_to_tick(self):
+        assert round_to_tick(50000.13, 0.1) == pytest.approx(50000.1)
+        assert round_to_tick(50000.15, 0.1) == pytest.approx(50000.2)
+
+    def test_round_to_step(self):
+        assert round_to_step(0.1234, 0.001) == pytest.approx(0.123)
+        assert round_to_step(0.1235, 0.001) == pytest.approx(0.124)
+
+    def test_zero_tick_passthrough(self):
+        assert round_to_tick(50000.13, 0.0) == pytest.approx(50000.13)
+
+    def test_zero_step_passthrough(self):
+        assert round_to_step(0.1234, 0.0) == pytest.approx(0.1234)
